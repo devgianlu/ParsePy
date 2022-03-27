@@ -30,13 +30,15 @@ ACCESS_KEYS = {}
 CONNECTION_TIMEOUT = 60
 
 
-def register(app_id, rest_key, **kw):
+def register(app_id, rest_key=None, client_key=None, master_key=None):
     global ACCESS_KEYS
+
     ACCESS_KEYS = {
         'app_id': app_id,
-        'rest_key': rest_key
-        }
-    ACCESS_KEYS.update(**kw)
+        'client_key': client_key,
+        'rest_key': rest_key,
+        'master_key': master_key,
+    }
 
 
 class SessionToken:
@@ -100,8 +102,6 @@ class ParseBase(object):
             raise core.ParseError('Missing connection credentials')
 
         app_id = ACCESS_KEYS.get('app_id')
-        rest_key = ACCESS_KEYS.get('rest_key')
-        master_key = ACCESS_KEYS.get('master_key')
 
         url = uri if uri.startswith(API_ROOT) else cls.ENDPOINT_ROOT + uri
         if _body is None:
@@ -120,14 +120,23 @@ class ParseBase(object):
         headers = {
             'Content-type': 'application/json',
             'X-Parse-Application-Id': app_id,
-            'X-Parse-REST-API-Key': rest_key
         }
         headers.update(extra_headers or {})
+
+        rest_key = ACCESS_KEYS.get('rest_key')
+        client_key = ACCESS_KEYS.get('client_key')
+
+        if rest_key:
+            headers['X-Parse-REST-API-Key'] = rest_key
+        elif client_key:
+            headers['X-Parse-Client-Key'] = client_key
 
         if cls.__name__ == 'File':
             request = Request(url.encode('utf-8'), data, headers)
         else:
             request = Request(url, data, headers)
+
+        master_key = ACCESS_KEYS.get('master_key')
 
         if ACCESS_KEYS.get('session_token'):
             request.add_header('X-Parse-Session-Token', ACCESS_KEYS.get('session_token'))
@@ -144,7 +153,7 @@ class ParseBase(object):
                 401: core.ResourceRequestLoginRequired,
                 403: core.ResourceRequestForbidden,
                 404: core.ResourceRequestNotFound
-                }.get(e.code, core.ParseError)
+            }.get(e.code, core.ParseError)
             raise exc(e.read())
 
         return json.loads(response.read().decode('utf-8'))
